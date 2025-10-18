@@ -169,22 +169,37 @@ fn calculate_final_position(
     radius: f64,
     polygon_vertices: &[Vec2],
 ) -> Vec2 {
-    let mut pos = start;
-    let direction = (target_vertex - pos).normalize();
+    let dir = (target_vertex - start).normalize();
 
-    // Simulate movement until tangent to two edges
-    let max_iterations = 10000;
-    for _ in 0..max_iterations {
-        let new_pos = pos + direction * 1.0;
+    let mut low = 0.0;
+    let mut high = (target_vertex - start).length(); // up to vertex distance
 
-        if is_tangent_to_two_edges(new_pos, radius, polygon_vertices) {
-            pos = new_pos;
-            break;
+    for _ in 0..50 {
+        let mid = (low + high) / 2.0;
+        let mid_pos = start + dir * mid;
+        let tangent = is_tangent_to_two_edges(mid_pos, radius, polygon_vertices);
+
+        if tangent {
+            return mid_pos;
         }
-        pos = new_pos;
+
+        // If circle still inside polygon but not tangent yet → move outward
+        let mut min_dist = f64::MAX;
+        for i in 0..polygon_vertices.len() {
+            let a = polygon_vertices[i];
+            let b = polygon_vertices[(i + 1) % polygon_vertices.len()];
+            let dist = point_to_segment_distance(mid_pos, a, b);
+            min_dist = min_dist.min(dist);
+        }
+
+        if min_dist > radius {
+            low = mid;
+        } else {
+            high = mid;
+        }
     }
 
-    pos
+    start + dir * low
 }
 
 // Calculate distance from point to line segment
@@ -415,7 +430,6 @@ mod tests {
 
     #[test]
     fn test_is_tangent_to_two_edges_square() {
-        // Create a square
         let vertices = vec![
             Vec2::new(100.0, 100.0),
             Vec2::new(-100.0, 100.0),
@@ -423,14 +437,10 @@ mod tests {
             Vec2::new(100.0, -100.0),
         ];
 
-        // // Center circle with radius 100 should be tangent to all 4 edges (but we check for exactly 2)
-        // let center = Vec2::new(0.0, 0.0);
-        // let radius = 100.0;
-
-        // At center with radius 100, it should be tangent to more than 2 edges
-        // Let's test a position that's tangent to exactly 2
-        let center_offset = Vec2::new(50.0, 0.0);
-        assert!(is_tangent_to_two_edges(center_offset, 50.0, &vertices));
+        // Circle centered near top-right corner → tangent to top and right edges.
+        let center_offset = Vec2::new(50.0, 50.0);
+        let radius = 50.0;
+        assert!(is_tangent_to_two_edges(center_offset, radius, &vertices));
     }
 
     #[test]
